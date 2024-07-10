@@ -11,7 +11,9 @@
                FILE-CONTROL.
                    SELECT EMPLOYEE-F ASSIGN TO 'employee.txt'
                        ORGANIZATION IS LINE SEQUENTIAL.
-                   SELECT PAYMENT-F ASSIGN TO "payment.txt"
+                   SELECT PAYMENT-F ASSIGN TO 'payment.txt'
+                       ORGANIZATION IS LINE SEQUENTIAL.
+                   SELECT ERROR-F ASSIGN TO 'error.txt'
                        ORGANIZATION IS LINE SEQUENTIAL.
        DATA DIVISION.
        FILE SECTION.
@@ -34,6 +36,14 @@
                05 MONEY-1000 PIC 9(2).
                05 MONEY-500 PIC 9(2).
                05 MONEY-100 PIC 9(2).
+       FD ERROR-F.
+       01 ERRORS.
+           03 NUM-ERR PIC X(30).
+           03 SAL-ERR PIC X(30).
+           03 STA-ERR PIC X(30).
+           03 DAT-ERR PIC X(30).
+           03 ID-ERR PIC X(30).
+           03 DUP-ERR PIC X(30).
        WORKING-STORAGE SECTION.
        01 EOF PIC X VALUE "N".
        01 EMP-ID-COMP PIC 9(6) VALUE 000000.
@@ -52,138 +62,146 @@
       *----------<メインルーチン>----------
        MAIN SECTION.
            OPEN INPUT EMPLOYEE-F
-           OUTPUT PAYMENT-F.
+           OUTPUT PAYMENT-F ERROR-F
            PERFORM PROCESSING UNTIL EOF="Y"
            CLOSE EMPLOYEE-F
-           PAYMENT-F.
+           PAYMENT-F
+           ERROR-F.
            STOP RUN.
       *----------<サブルーチン>----------
        PROCESSING SECTION.
            READ EMPLOYEE-F
            AT END MOVE "Y" TO EOF.
+           DISPLAY "-----From here----- ".
+           DISPLAY "EMPLOYEE NUMBER:"EMP-ID.
            IF EOF="N"
                PERFORM CHECK-RECORD
-           ELSE
                DISPLAY "PASS0001"
+           ELSE
+               DISPLAY "PASS0002"
            END-IF.
       *PROCESSING SECTION出口
        EXIT.
 
-      *>  ここから入力データの判定
-       
+      *>-----ここから入力データの判定-----
+
        CHECK-RECORD SECTION.
-           DISPLAY "-----From here----- "
       *>  入力ファイルのデータ項目が数字であるかどうかを判定する
            IF EMPLOYEE IS NUMERIC THEN
                PERFORM CHECK-RECORD2
+               DISPLAY "PASS0003"
            ELSE
-               DISPLAY "NUMERIC INPUT ERROR!"
+               MOVE "NUMERIC INPUT ERROR!" TO NUM-ERR
+               WRITE ERRORS
+               INITIALIZE ERRORS
+               DISPLAY "PASS0004"
            END-IF.
        EXIT.
-           
+
       *>  入力ファイルの基本給が000000以上であるかどうかを判定する
-       CHECK-RECORD2 SECTION.         
+       CHECK-RECORD2 SECTION.
            IF BASIC-SALARY>000000 THEN
                PERFORM CHECK-RECORD3
+               DISPLAY "PASS0005"
            ELSE
-               DISPLAY "BASIC-SALARY INPUT ERROR!"
+               MOVE "BASIC-SALARY INPUT ERROR!" TO SAL-ERR
+               WRITE ERRORS
+               INITIALIZE ERRORS
+               DISPLAY "PASS0006"
            END-IF.
        EXIT.
-       
+
       *>  入力ファイルの従業員ステータスが0,1以外かどうかを判定する
        CHECK-RECORD3 SECTION.
            IF EMP-STATUS<=2 THEN
                PERFORM CHECK-RECORD4
+               DISPLAY "PASS0007"
            ELSE
-               DISPLAY "EMP-STATUS INPUT ERROR!"
+               MOVE "EMP-STATUS INPUT ERROR!" TO STA-ERR
+               WRITE ERRORS
+               INITIALIZE ERRORS
+               DISPLAY "PASS0008"
        EXIT.
-       
+
       *>  入力ファイルの入社日が正しいかを判定する
        CHECK-RECORD4 SECTION.
            IF (EMP-YY>=1993)AND(EMP-YY<=2014) THEN
                PERFORM CHECK-RECORD5
+               DISPLAY "PASS0009"
            ELSE
-               DISPLAY "DATE INPUT ERROR!"
+               MOVE "DATE INPUT ERROR!" TO DAT-ERR
+               WRITE ERRORS
+               INITIALIZE ERRORS
+               DISPLAY "PASS0010"
+           END-IF.
        EXIT.
-           
+
       *>  入力ファイルの従業員番号が000001以上かを判定する
        CHECK-RECORD5 SECTION.
            IF EMP-ID>000000 THEN
                PERFORM CHECK-RECORD6
+               DISPLAY "PASS0011"
            ELSE
-               DISPLAY "EMP-ID INPUT ERROR!"
+               MOVE "EMP-ID INPUT ERROR!" TO ID-ERR
+               WRITE ERRORS
+               INITIALIZE ERRORS
+               DISPLAY "PASS0012"
+           END-IF.
        EXIT.
-       
+
        CHECK-RECORD6 SECTION.
       *>  入力ファイルの従業員番号が重複していないかを判定する
            IF EMP-ID IS NOT = EMP-ID-COMP THEN
                PERFORM PROCESSING-EMPLOYEE
+               DISPLAY "PASS0013"
            ELSE
-               DISPLAY "EMP-ID DUPLICATE ERROR!"
+               MOVE "EMP-ID DUPLICATE ERROR!" TO DUP-ERR
+               WRITE ERRORS
+               INITIALIZE ERRORS
+               DISPLAY "PASS0014"
            END-IF.
        EXIT.
-       
+
        PROCESSING-EMPLOYEE SECTION.
       *従業員番号を支給ファイルのレコード様式にMOVEする
                MOVE EMP-ID TO PAYMENT-ID.
-      *記念日から入社日を引き勤続年数を算出
-      *条件に満たない場合はマイナスをMOVEして処理をしない
-               IF EMP-YY>0 THEN
+      *記念日から入社日を引き勤続期間を算出
                 COMPUTE LEN = 2013 * 12 + 4 - EMP-YY * 12 - EMP-MM
-                DISPLAY "PASS0003"
-               ELSE
-                MOVE -100 TO LEN
-                DISPLAY "PASS0003"
-               END-IF.
-
-               DISPLAY "EMP-YEAR:"EMP-YY.
-               DISPLAY "EMP-MM:"EMP-MM.
-               DISPLAY "Length of service:"LEN.
-               COMPUTE LEN2 = LEN / 12
-
+      *>  算出した勤続期間から支給係数を算出する
                IF (LEN>0) AND (LEN<=36) AND (EMP-STATUS = 0)
                THEN
                   MOVE 0.05 TO RATE
-                  DISPLAY "Less than 3 years, General staff"
+                  DISPLAY "PASS0015"
                ELSE
                 IF (LEN>0) AND (LEN<=36) AND (EMP-STATUS) = 1
                 THEN
                   MOVE 0.10 TO RATE
-                  DISPLAY "Less than 3 years, Manager"
+                  DISPLAY "PASS0016"
                 ELSE
                  IF (LEN>36) AND (LEN<=120) AND (EMP-STATUS = 0)
                  THEN
                   MOVE 0.10 TO RATE
-                  DISPLAY "Over 3 years, upto 9 years, General staff"
+                  DISPLAY "PASS0017"
                  ELSE
                   IF (LEN>36) AND (LEN<=120) AND (EMP-STATUS = 1)
                   THEN
                    MOVE 0.15 TO RATE
-                   DISPLAY "Over 3 years, upto 9 years, Manager"
+                   DISPLAY "PASS0018"
                   ELSE
                    IF (LEN>120) AND (LEN<=240) AND (EMP-STATUS = 0)
                    THEN
                     MOVE 0.15 TO RATE
-                    DISPLAY "Over 10 years, General staff"
-                    DISPLAY RATE
+                    DISPLAY "PASS0019"
                    ELSE
                     IF (LEN>10) AND (LEN<=240)AND (EMP-STATUS = 1)
                     THEN
                      MOVE 0.20 TO RATE
-                     DISPLAY "Over 10 years, Manager"
-                    ELSE
-                     DISPLAY "ERROR DATA!"
+                     DISPLAY "PASS0020"
                     END-IF
                    END-IF
                   END-IF
                  END-IF
                 END-IF
-               END-IF.
-      *入社日が2013年より先の場合はRATEに0を格納する
-               IF LEN2<0 THEN
-                   MOVE 0 TO RATE
-               ELSE
-                   DISPLAY "PASS0005"
                END-IF.
 
       *格納したRATEに基本給を掛け支給金額を算出
@@ -202,20 +220,7 @@
                DIVIDE 100 INTO BASIC-RESULT5 GIVING MONEY-100.
       *ファイルに書き出す
                WRITE PAYMENT.
-      *算出結果をディスプレイで表示
-               DISPLAY "EMPLOYEE-ID:"EMP-ID.
-               DISPLAY "EMPLOYEE-STATUS:"EMP-STATUS.
-               DISPLAY "DATE-OF-EMP:"DATE-OF-EMP.
-               DISPLAY "BASIC-SALARY:"BASIC-SALARY.
-               DISPLAY "YEAR:"LEN2.
-               DISPLAY "RATE:"RATE.
-               DISPLAY "PAYMENT-ID:"PAYMENT-ID.
-               DISPLAY "PAYMENT AMOUNT:"PAYMENT-AMOUNT3.
-               DISPLAY "10000:"MONEY-10000.
-               DISPLAY "5000:"MONEY-5000.
-               DISPLAY "1000:"MONEY-1000.
-               DISPLAY "500:"MONEY-500.
-               DISPLAY "100:"MONEY-100.
+
       *>       次の従業員番号重複の判定のためにワークEMP-ID-COMPにEMP-IDを格納
                MOVE EMP-ID TO EMP-ID-COMP.
       *作業領域を初期化する
